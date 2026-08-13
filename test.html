@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>Taxel — Unit Tests</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 24px; }
+    h1 { font-size: 20px; }
+    .pass { color: #4ade80; }
+    .fail { color: #f87171; }
+    .summary { font-size: 16px; margin-bottom: 16px; }
+    ul { line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>TaxEngine — Unit Tests</h1>
+  <div id="summary" class="summary">กำลังรัน...</div>
+  <ul id="list"></ul>
+
+  <script type="module">
+    import { runTaxEngineTests } from './src/domain/tax/TaxEngine.test.js';
+
+    const { passed, failed, total, results } = runTaxEngineTests();
+
+    document.getElementById('summary').textContent =
+      `ผ่าน ${passed}/${total}` + (failed ? ` — ล้มเหลว ${failed} รายการ` : ' — ผ่านทั้งหมด ✓');
+
+    const list = document.getElementById('list');
+    for (const r of results) {
+      const li = document.createElement('li');
+      li.className = r.pass ? 'pass' : 'fail';
+      li.textContent = (r.pass ? '✓ ' : '✗ ') + r.name + (r.error ? ` — ${r.error}` : '');
+      list.appendChild(li);
+    }
+  </script>
+</body>
+</html>

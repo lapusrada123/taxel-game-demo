@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Taxel — เกมสอนภาษี</title>
+  <style>
+    /* ฟอนต์พิกเซลหลักของเกมทั้งหมด (แคนวาส + DOM input ทับ) รองรับทั้งไทย/อังกฤษ */
+    @font-face {
+      font-family: 'SOVBokThang';
+      src: url('./public/assets/fonts/SOV_BokThang.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #1a1a2e;
+      overflow: hidden;
+      font-family: 'SOVBokThang', system-ui, "Segoe UI", sans-serif;
+    }
+    #game {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* กันการ zoom สองนิ้ว/ดับเบิลแทป บนมือถือ ให้คุมเกมได้ลื่น */
+    * { touch-action: none; -webkit-user-select: none; user-select: none; }
+    canvas { image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- Phaser 4 (vendored ในเครื่อง รันได้แบบ offline) -->
+  <script src="./lib/phaser.min.js"></script>
+  <!-- Entry point -->
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
