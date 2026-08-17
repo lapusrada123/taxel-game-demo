@@ -365,7 +365,8 @@ export class RunnerScene extends Phaser.Scene {
         if (this.handController.ready) {
           handStatusText.setText('กล้องพร้อมแล้ว! ลองแบมือ/กำมือดูหน้ากล้องได้เลย').setColor('#2f9e44');
         } else if (this.handController.error) {
-          handStatusText.setText('เปิดกล้องไม่สำเร็จ (ใช้ปุ่มกระโดด/คีย์บอร์ดแทนได้ปกติ)').setColor('#e03131');
+          // โชว์ข้อความ error จริงบนจอเลย (ไม่ต้องเปิด console) ช่วยวินิจฉัยจากเครื่องจริงได้ง่ายขึ้น
+          handStatusText.setText(`เปิดกล้องไม่สำเร็จ: ${this.handController.error} (ใช้ปุ่มกระโดด/คีย์บอร์ดแทนได้ปกติ)`).setColor('#e03131');
         } else {
           handStatusText.setText('กำลังเปิดกล้อง...').setColor('#555555');
         }

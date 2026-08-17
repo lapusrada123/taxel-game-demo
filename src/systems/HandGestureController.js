@@ -73,8 +73,10 @@ export class HandGestureController {
       this.ready = true;
       this._loop();
     } catch (err) {
-      this.error = err?.message || String(err);
+      this.error = err?.name ? `${err.name}: ${err.message}` : String(err);
       this.ready = false;
+      // log เต็มๆ ไว้เผื่อ debug จากเครื่องจริง (this.error ที่โชว์บนจอตัดสั้นไว้แค่พอเห็น ไม่พอสำหรับ debug ลึก)
+      console.error('[HandGestureController] เปิดกล้อง/โหลดโมเดลไม่สำเร็จ:', err);
     }
   }
 
