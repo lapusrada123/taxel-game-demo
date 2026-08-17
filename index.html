@@ -30,10 +30,28 @@
     /* กันการ zoom สองนิ้ว/ดับเบิลแทป บนมือถือ ให้คุมเกมได้ลื่น */
     * { touch-action: none; -webkit-user-select: none; user-select: none; }
     canvas { image-rendering: pixelated; }
+
+    /* กล่องพรีวิวกล้องมุมขวาบน (ระบบควบคุมด้วยท่ามือ - ดู HandGestureController.js)
+       ซ่อนไว้ก่อนด้วย display:none จนกว่ากล้องจะพร้อมจริง (RunnerScene เป็นคนสั่งโชว์) */
+    #handCamPreview {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      width: 160px;
+      height: 120px;
+      border: 3px solid #ffcc33;
+      border-radius: 8px;
+      transform: scaleX(-1); /* กลับด้านซ้าย-ขวาให้เหมือนกระจกเงา ดูธรรมชาติเวลาขยับมือเอง */
+      object-fit: cover;
+      z-index: 50;
+      display: none;
+      background: #000;
+    }
   </style>
 </head>
 <body>
   <div id="game"></div>
+  <video id="handCamPreview" autoplay muted playsinline></video>
 
   <!-- Phaser 4 (vendored ในเครื่อง รันได้แบบ offline) -->
   <script src="./lib/phaser.min.js"></script>

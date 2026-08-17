@@ -7,6 +7,7 @@ import { GAME_WIDTH, GAME_HEIGHT, GROUND_Y } from '../../config/gameConfig.js';
 import { GameState } from '../../domain/GameState.js';
 import { ITEM_TYPES, STAMINA_DRAIN_RATE, SPEED_POTION_WEIGHTS, SPEED_POTION_INTERVAL_SEC, SPECIAL_ITEM_TYPES } from '../../domain/items/ItemTypes.js';
 import { makeButton } from '../ui/makeButton.js';
+import { HandGestureController } from '../../systems/HandGestureController.js';
 
 // ไอเทมที่ต้องถามผู้เล่นก่อนว่า "ซื้อ" หรือ "ไม่ซื้อ" ตอนเก็บได้ (ดู showPurchaseDecisionPopup) - มรดกไม่ต้องถาม เป็นรายได้ล้วนๆ
 const PURCHASE_DECISION_TYPES = ['fund', 'insurance'];
@@ -125,6 +126,12 @@ export class RunnerScene extends Phaser.Scene {
     this.lastCheckedSegment = -1; // ใช้ตรวจจับตอนเปลี่ยนช่องหลอดเวลาใน update() เพื่อปล่อยคิวที่ค้างไว้
     this.decisionPopupActive = false; // หยุดโลกทั้งหมดชั่วคราวตอนถามซื้อ/ไม่ซื้อ (ดู showPurchaseDecisionPopup)
 
+    // ระบบควบคุมด้วยท่ามือผ่านกล้อง (แบมือ=วิ่ง, กำมือ=กระโดด, ไม่เจอมือ=หยุด) เริ่มขอกล้อง+โหลดโมเดลไว้ตั้งแต่ต้น
+    // ให้มีเวลาพร้อมก่อนผู้เล่นกดข้ามป๊อปอัพ ถ้าล้มเหลว (ไม่มีกล้อง/ไม่อนุญาต) จะ fallback ไปคีย์บอร์ด/ปุ่มบนจอแบบเดิมอัตโนมัติ (ดู update())
+    this.handController = new HandGestureController();
+    this.handController.start();
+    this.lastGesture = 'none';
+
     // แสดงป๊อปอัพอธิบายไอเทมก่อน ผู้เล่นกดต่อแล้วค่อยเริ่มวิ่งจริง
     this.introActive = true;
     this.player.setFrame(0); // ยืนนิ่งรอ
@@ -205,9 +212,16 @@ export class RunnerScene extends Phaser.Scene {
       this.runSound.stop();
       this.bgm.stop();
       this.finished = true;
+      this.handController.stop(); // ปิดกล้องด้วย ไม่งั้นไฟกล้องจะค้างเปิดอยู่หลังออกจากมินิเกม
       GameState.clearTaxWorksheets(); // ออกจากมินิเกมแล้ว ล้างข้อมูลกระดาษทดคำนวณภาษี/ตารางอัตราภาษีที่ค้างไว้
       this.scene.start('Menu');
     });
+
+    // สถานะท่ามือสดๆ ระหว่างเล่น (ให้ผู้พรีเซนต์เห็นว่าระบบอ่านท่าไหนอยู่) อัปเดตทุกเฟรมใน update()
+    this.handStatusHudText = this.add.text(20, 55, '', {
+      fontFamily: "'SOVBokThang', sans-serif", fontSize: '14px',
+      color: '#ffffff', backgroundColor: '#00000066', padding: { x: 8, y: 4 },
+    }).setScrollFactor(0).setDepth(100);
 
     this.statsText = this.add.text(GAME_WIDTH - 20, 20, '', {
       fontFamily: "'SOVBokThang', sans-serif", fontSize: '18px', align: 'right', fontStyle: 'bold',
@@ -327,6 +341,7 @@ export class RunnerScene extends Phaser.Scene {
       '1. วิ่งหรือกระโดดเก็บเหรียญเพื่อสะสมเงิน',
       '2. เพิ่มหลอดอาหารด้วยการเก็บไอเทมอาหาร',
       '3. เมื่อวิ่งจนครบ 3 เดือน ผู้เล่นจะต้องคำนวณภาษีให้ถูกต้อง',
+      '4. ควบคุมด้วยท่ามือผ่านกล้อง: แบมือ = วิ่ง, กำมือ = กระโดด, ไม่แบ/ไม่กำ = หยุด (ใช้ปุ่มกระโดดบนจอ/คีย์บอร์ดแทนได้เสมอ)',
     ];
     for (const rule of rules) {
       const ruleText = this.add.text(-boxWidth / 2 + textPadding, cursorY, rule, {
@@ -336,6 +351,26 @@ export class RunnerScene extends Phaser.Scene {
       children.push(ruleText);
       cursorY += ruleText.height + 14;
     }
+
+    // สถานะกล้อง/ระบบจับท่ามือ อัปเดตสดๆ ระหว่างรอ (เช็คทุก 300ms) ให้ผู้พรีเซนต์รู้ว่าพร้อมหรือยังก่อนกดเริ่ม
+    const handStatusText = this.add.text(-boxWidth / 2 + textPadding, cursorY, 'กำลังเปิดกล้อง...', {
+      fontFamily: "'SOVBokThang', sans-serif", fontSize: '16px', color: '#555555', fontStyle: 'italic',
+      wordWrap: { width: boxWidth - textPadding * 2 },
+    }).setOrigin(0, 0);
+    children.push(handStatusText);
+    cursorY += handStatusText.height + 6;
+
+    const handStatusTimer = this.time.addEvent({
+      delay: 300, loop: true, callback: () => {
+        if (this.handController.ready) {
+          handStatusText.setText('กล้องพร้อมแล้ว! ลองแบมือ/กำมือดูหน้ากล้องได้เลย').setColor('#2f9e44');
+        } else if (this.handController.error) {
+          handStatusText.setText('เปิดกล้องไม่สำเร็จ (ใช้ปุ่มกระโดด/คีย์บอร์ดแทนได้ปกติ)').setColor('#e03131');
+        } else {
+          handStatusText.setText('กำลังเปิดกล้อง...').setColor('#555555');
+        }
+      },
+    });
     cursorY += 6;
 
     const buttonAreaHeight = 90;
@@ -355,6 +390,7 @@ export class RunnerScene extends Phaser.Scene {
     container.setDepth(201);
 
     nextBtn.on('pointerdown', () => {
+      handStatusTimer.remove();
       dim.destroy();
       container.destroy();
       onDismiss();
@@ -865,6 +901,26 @@ export class RunnerScene extends Phaser.Scene {
     const jumpPressed = jumpKeyPressed || this.touchJumpQueued;
     this.touchJumpQueued = false;
 
+    // ระบบท่ามือ (ถ้ากล้อง/โมเดลพร้อมใช้งานจริง): แบมือ=วิ่ง, กำมือ=กระโดด, ไม่แบ/ไม่กำ=หยุดวิ่ง
+    // กำมือกระตุ้นกระโดดแค่ตอน "ขอบขาขึ้น" (พึ่งกำ) ครั้งเดียว กันกระโดดรัวทุกเฟรมตอนกำมือค้างไว้
+    // ถ้ากล้องไม่พร้อม (ไม่อนุญาต/ไม่มีกล้อง) ตัวละครวิ่งอัตโนมัติแบบเดิมเป๊ะ คุมได้แค่กระโดดผ่านคีย์บอร์ด/ปุ่มบนจอ
+    const handReady = this.handController && this.handController.ready;
+    const gesture = handReady ? this.handController.gesture : null;
+    const gestureJumpTriggered = handReady && gesture === 'fist' && this.lastGesture !== 'fist';
+    if (handReady) this.lastGesture = gesture;
+    // ช่วงเดินเข้าฉากสุดท้าย (finalBgShown) ให้เดินหน้าต่อเสมอไม่สนท่ามือ เหมือนที่ปิดกระโดดไว้ตรงนั้นด้วย
+    const shouldRun = this.finalBgShown || !handReady || gesture === 'open' || gesture === 'fist';
+
+    if (!handReady) {
+      this.handStatusHudText.setText(this.handController.error ? 'มือ: ไม่ได้ใช้กล้อง (ใช้ปุ่ม/คีย์บอร์ด)' : 'มือ: กำลังเปิดกล้อง...');
+    } else if (gesture === 'open') {
+      this.handStatusHudText.setText('มือ: แบมือ (วิ่ง)');
+    } else if (gesture === 'fist') {
+      this.handStatusHudText.setText('มือ: กำมือ (กระโดด!)');
+    } else {
+      this.handStatusHudText.setText('มือ: ไม่เจอท่า (หยุด)');
+    }
+
     const body = this.player.body;
     const onGround = body.blocked.down || body.touching.down;
     if (onGround) this.jumpsUsed = 0;
@@ -876,12 +932,12 @@ export class RunnerScene extends Phaser.Scene {
       this.wasOnGround = onGround;
     }
 
-    // วิ่งไปข้างหน้าเองตลอดเวลา (Cookie Run style) ผู้เล่นคุมได้แค่กระโดด/ดับเบิ้ลจั้ม
+    // วิ่งไปข้างหน้าเองตลอดเวลา (Cookie Run style) ผู้เล่นคุมได้แค่กระโดด/ดับเบิ้ลจั้ม (หรือหยุดวิ่งด้วยท่ามือ ถ้าระบบกล้องพร้อม)
     // ความเร็วคูณด้วย speedMultiplier ถ้าเก็บยาสปีด/ยาหน่วงมา (ดู applySpeedEffect)
-    body.setVelocityX(AUTO_SPEED * this.speedMultiplier);
+    body.setVelocityX(shouldRun ? AUTO_SPEED * this.speedMultiplier : 0);
 
     // เข้าฉากกรมสรรพากรแล้ว (finalBgShown) ห้ามกระโดด/ทำอะไรได้อีก ให้เดินเข้าฉากเฉยๆ
-    if (!this.finalBgShown && jumpPressed && this.jumpsUsed < MAX_JUMPS) {
+    if (!this.finalBgShown && (jumpPressed || gestureJumpTriggered) && this.jumpsUsed < MAX_JUMPS) {
       body.setVelocityY(-JUMP_SPEED);
       this.jumpsUsed++;
       this.spawnJumpEffect();
@@ -979,6 +1035,7 @@ export class RunnerScene extends Phaser.Scene {
     this.finished = true;
     this.runSound.stop();
     this.bgm.stop();
+    this.handController.stop(); // ปิดกล้องด้วย ไม่งั้นไฟกล้องจะค้างเปิดอยู่หลังจบมินิเกม
     this.scene.start('Summary');
   }
 
@@ -986,6 +1043,7 @@ export class RunnerScene extends Phaser.Scene {
     this.finished = true;
     this.runSound.stop();
     this.bgm.stop();
+    this.handController.stop(); // ปิดกล้องด้วย ไม่งั้นไฟกล้องจะค้างเปิดอยู่หลังจบเกม
     this.scene.start('GameOver', { reason });
   }
 
