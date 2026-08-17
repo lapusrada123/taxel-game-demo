@@ -4,6 +4,9 @@
 // ถ้ากล้อง/โมเดลโหลดไม่สำเร็จ (ผู้เล่นไม่อนุญาตกล้อง, ไม่มีกล้อง ฯลฯ) -> ready จะค้างเป็น false
 // ตัวเรียกใช้ (RunnerScene) ต้องเช็ค .ready ก่อนเสมอ แล้ว fallback ไปใช้คีย์บอร์ด/ปุ่มบนจอแทนแบบเดิม ไม่ให้เกมค้าง
 const GESTURE_SCORE_THRESHOLD = 0.6; // ความมั่นใจขั้นต่ำก่อนเชื่อผลท่ามือ กันสั่นไหว/ทายมั่ว
+// ห่างขั้นต่ำระหว่างการ infer แต่ละครั้ง (ms) - ท่ามือไม่ต้องอัปเดตทุกเฟรม (30-60fps) แค่ ~11 ครั้ง/วิก็พอ
+// ลดภาระ main thread ที่แย่งกับ Phaser render loop กันเกมสะดุด (recognizeForVideo เป็นงานหนัก โดยเฉพาะ CPU delegate)
+const MIN_INFER_INTERVAL_MS = 90;
 
 let visionModulePromise = null;
 function loadVisionModule() {
@@ -23,6 +26,7 @@ export class HandGestureController {
     this.recognizer = null;
     this._rafId = null;
     this._lastVideoTime = -1;
+    this._lastInferTime = 0;
     this._stopped = false;
   }
 
@@ -79,11 +83,15 @@ export class HandGestureController {
     this._rafId = requestAnimationFrame(() => this._loop());
     if (!this.videoEl || this.videoEl.readyState < 2) return;
     if (this.videoEl.currentTime === this._lastVideoTime) return; // ยังไม่มีเฟรมใหม่ ไม่ต้อง infer ซ้ำ
+
+    const now = performance.now();
+    if (now - this._lastInferTime < MIN_INFER_INTERVAL_MS) return; // ยังไม่ถึงจังหวะ infer ครั้งถัดไป
+    this._lastInferTime = now;
     this._lastVideoTime = this.videoEl.currentTime;
 
     let result;
     try {
-      result = this.recognizer.recognizeForVideo(this.videoEl, Math.round(performance.now()));
+      result = this.recognizer.recognizeForVideo(this.videoEl, Math.round(now));
     } catch (err) {
       return; // เฟรมเพี้ยนบางเฟรมข้ามไปเฉยๆ ไม่ให้เกม crash
     }

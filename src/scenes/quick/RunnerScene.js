@@ -863,10 +863,15 @@ export class RunnerScene extends Phaser.Scene {
   }
 
   refreshStats() {
+    // เรียกทุกเฟรมจาก update() แต่เงินไม่ได้เปลี่ยนทุกเฟรม เลยเช็คก่อนค่อย setText (กัน texture regen ทุกเฟรมจนเกมสะดุด)
     const sign = GameState.money >= 0 ? '+' : '';
-    this.statsText.setText(`เงิน: ${sign}${GameState.money.toLocaleString()} บาท`);
-    this.statsText.setColor(GameState.money >= 0 ? '#ffffff' : '#f87171');
-    this.layoutPersistentBadges();
+    const text = `เงิน: ${sign}${GameState.money.toLocaleString()} บาท`;
+    if (text !== this.lastStatsText) {
+      this.lastStatsText = text;
+      this.statsText.setText(text);
+      this.statsText.setColor(GameState.money >= 0 ? '#ffffff' : '#f87171');
+      this.layoutPersistentBadges();
+    }
 
     this.updateStaminaBar(this.foodBar, GameState.foodStamina);
     if (this.milkBar) this.updateStaminaBar(this.milkBar, GameState.milkStamina);
@@ -911,14 +916,16 @@ export class RunnerScene extends Phaser.Scene {
     // ช่วงเดินเข้าฉากสุดท้าย (finalBgShown) ให้เดินหน้าต่อเสมอไม่สนท่ามือ เหมือนที่ปิดกระโดดไว้ตรงนั้นด้วย
     const shouldRun = this.finalBgShown || !handReady || gesture === 'open' || gesture === 'fist';
 
-    if (!handReady) {
-      this.handStatusHudText.setText(this.handController.error ? 'มือ: ไม่ได้ใช้กล้อง (ใช้ปุ่ม/คีย์บอร์ด)' : 'มือ: กำลังเปิดกล้อง...');
-    } else if (gesture === 'open') {
-      this.handStatusHudText.setText('มือ: แบมือ (วิ่ง)');
-    } else if (gesture === 'fist') {
-      this.handStatusHudText.setText('มือ: กำมือ (กระโดด!)');
-    } else {
-      this.handStatusHudText.setText('มือ: ไม่เจอท่า (หยุด)');
+    // setText() ทำให้ Phaser วาดใหม่ + อัปโหลด texture ขึ้น GPU ทุกครั้ง เรียกทุกเฟรมจะทำให้เกมสะดุด
+    // เลยเช็คก่อนว่าข้อความเปลี่ยนจริงไหมค่อยเรียก (ท่ามือไม่ได้เปลี่ยนทุกเฟรมอยู่แล้ว)
+    const handStatusMsg = !handReady
+      ? (this.handController.error ? 'มือ: ไม่ได้ใช้กล้อง (ใช้ปุ่ม/คีย์บอร์ด)' : 'มือ: กำลังเปิดกล้อง...')
+      : gesture === 'open' ? 'มือ: แบมือ (วิ่ง)'
+      : gesture === 'fist' ? 'มือ: กำมือ (กระโดด!)'
+      : 'มือ: ไม่เจอท่า (หยุด)';
+    if (handStatusMsg !== this.lastHandStatusMsg) {
+      this.lastHandStatusMsg = handStatusMsg;
+      this.handStatusHudText.setText(handStatusMsg);
     }
 
     const body = this.player.body;
